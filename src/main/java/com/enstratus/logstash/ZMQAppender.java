@@ -25,6 +25,8 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 	private String identity;
 	private boolean blocking;
 	private JsonObject logevent;
+	private int backlog;
+	private int HWM;
 	
 	private static final String PUBSUB = "pub";
 	private static final String PUSHPULL = "push";
@@ -40,7 +42,6 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 		this.socket = socket;
 	}
 
-	@Override
 	public void close() {
 
 	}
@@ -49,7 +50,6 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 	 * ZMQAppender doesn't require layout, just publishes log events over
 	 * ZeroMQ. Real logging tasks are up to subscribers.
 	 */
-	@Override
 	public boolean requiresLayout() {
 		return false;
 	}
@@ -117,7 +117,12 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 		if (identity != null) {
 			socket.setIdentity(identity.getBytes());
 		}
-		
+		if (HWM != 0) {
+			socket.setHWM(HWM);
+		}
+		if (backlog != 0) {
+			socket.setBacklog(backlog);
+		}
 		this.socket = socket;
 	}
 
@@ -127,6 +132,22 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 
 	public void setThreads(final int threads) {
 		this.threads = threads;
+	}
+	
+	public int getBacklog() {
+		return backlog;
+	}
+
+	public void setBacklog(int backlog) {
+		this.backlog = backlog;
+	}
+
+	public int getHWM() {
+		return HWM;
+	}
+
+	public void setHWM(int hWM) {
+		HWM = hWM;
 	}
 
 	public String getEndpoint() {
