@@ -1,6 +1,5 @@
 package com.enstratus.logstash;
 
-import org.apache.log4j.Appender;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.helpers.LogLog;
@@ -8,15 +7,17 @@ import org.zeromq.ZMQ;
 import org.zeromq.ZMQ.Context;
 import org.zeromq.ZMQ.Socket;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.enstratus.logstash.data.LoggingEventData;
+import com.google.gson.*;
 
-public class ZMQAppender extends AppenderSkeleton implements Appender {
+import com.enstratus.logstash.data.LoggingEventData;
+import com.enstratus.logstash.layouts.*;
+
+public class ZMQAppender extends AppenderSkeleton {
 
 	private Socket socket;
 	private final Gson gson = new Gson();
 
+	// ZMQ specific "stuff"
 	private int threads;
 	private String endpoint;
 	private String mode;
@@ -28,10 +29,16 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 	private int backlog;
 	private int HWM;
 	
+	// Ancillary settings
+	private String tags;
+	private String eventFormat = "json_event";
+	
 	private static final String PUBSUB = "pub";
 	private static final String PUSHPULL = "push";
 	private static final String CONNECTMODE = "connect";
 	private static final String BINDMODE = "bind";
+    private static final String JSONFORMAT = "json";
+    private static final String JSONEVENTFORMAT = "json_event";
 
 	public ZMQAppender() {
 		super();
@@ -42,33 +49,46 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 		this.socket = socket;
 	}
 
+	@Override
 	public void close() {
 
 	}
 
-	/**
-	 * ZMQAppender doesn't require layout, just publishes log events over
-	 * ZeroMQ. Real logging tasks are up to subscribers.
-	 */
+	@Override
 	public boolean requiresLayout() {
-		return false;
+        return false;
 	}
 
 	@Override
-	protected void append(final LoggingEvent event) {
+	protected void append(LoggingEvent event) {
 		final LoggingEventData data = new LoggingEventData(event);
-		JsonObject eventData = (JsonObject) gson.toJsonTree(data);
-		String identifier = getIdentity();
-		if (identifier != null) {
-			String identity = "identity";
-			eventData.addProperty(identity, identifier);
-		}
-		final String json = gson.toJson(eventData);
-		if ((topic != null) && (PUBSUB.equals(socketType))) {
-			socket.send(topic.getBytes(), ZMQ.SNDMORE);
-		}
-		socket.send(json.getBytes(), blocking ? 0 : ZMQ.NOBLOCK);
-	}
+        String messageFormat = getEventFormat();
+        String logLine = "";
+
+        String identifier = getIdentity();
+        String[] tagz;
+        if(!(null == tags)) {
+            tagz = getTags().split(",");
+        }
+        else
+        {
+            tagz = null;
+        }
+
+        if(JSONFORMAT.equals(messageFormat)) {
+            JSONMessage message = new JSONMessage(data,identifier,tagz);
+            logLine = message.toJson();
+        }
+        else if(JSONEVENTFORMAT.equals(messageFormat)) {
+            LogstashMessage message = new LogstashMessage(data,identifier,tagz);
+            logLine = message.toJson();
+        }
+        if ((topic != null) && (PUBSUB.equals(socketType))) {
+            socket.send(topic.getBytes(), ZMQ.SNDMORE);
+        }
+
+        socket.send(logLine.getBytes(), blocking ? 0 : ZMQ.NOBLOCK);
+    }
 
 	@Override
 	public void activateOptions() {
@@ -76,6 +96,7 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 
 		final Context context = ZMQ.context(threads);
 		Socket sender;
+
 		if (PUBSUB.equals(socketType)) {
 			LogLog.debug("Setting socket type to PUB");
 			sender = context.socket(ZMQ.PUB);
@@ -196,5 +217,21 @@ public class ZMQAppender extends AppenderSkeleton implements Appender {
 	
 	public void setIdentity(final String identity) {
 		this.identity = identity;
+	}
+	
+	public String getTags() {
+		return tags;
+	}
+	
+	public void setTags(final String tags) {
+		this.tags = tags;
+	}
+	
+	public String getEventFormat() {
+		return eventFormat;
+	}
+
+	public void setEventFormat(final String eventFormat) {
+		this.eventFormat = eventFormat;
 	}
 }

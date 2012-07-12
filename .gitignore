@@ -5,3 +5,6 @@ target/*
 .classpath
 .settings/
 .project
+.idea
+Main.iml
+Test.iml
